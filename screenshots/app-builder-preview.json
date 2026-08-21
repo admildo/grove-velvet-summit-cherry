@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Fast Thinking",
+      "hasCanvas": true,
+      "bodyTextLen": 201,
+      "bodyTextHash": "7a2eb92e1388c32ea223f506586493fbe90b8230e62c46da19f73b1b99aa3a05",
+      "bodyTextPrefix": "TAKEOVER HI 0000 0000 LAST CLEAN PROCESS Fast Thinking Jump rock",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Fast Thinking",
+      "hasCanvas": true,
+      "bodyTextLen": 201,
+      "bodyTextHash": "7a2eb92e1388c32ea223f506586493fbe90b8230e62c46da19f73b1b99aa3a05",
+      "bodyTextPrefix": "TAKEOVER HI 0000 0000 LAST CLEAN PROCESS Fast Thinking Jump rock",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}
