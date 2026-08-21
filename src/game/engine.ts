@@ -44,6 +44,8 @@ export type Scenery = {
   at: number;
   scale: number;
   seed: number;
+  /** Parallax depth: higher = closer / moves faster with world. */
+  depth: number;
 };
 
 export type Meteor = {
@@ -54,6 +56,8 @@ export type Meteor = {
   life: number;
   max: number;
   len: number;
+  /** Visual weight: thicker / brighter streaks during showers. */
+  weight: number;
 };
 
 export type Session = {
@@ -137,7 +141,7 @@ export function createSession(): Session {
     particles: [],
     scenery: seedScenery(0),
     meteors: [],
-    meteorWait: 1.4,
+    meteorWait: 0.6,
     shake: 0,
     flash: 0,
     acc: 0,
@@ -268,222 +272,222 @@ function spawnObstacle(s: Session, x: number, type: ObstacleType) {
 
 const SCENERY_KINDS: SceneryKind[] = ["shipA", "dinoA", "shipB", "dinoB"];
 
+/** Ships sit closer (higher depth); bone remains mid-ground. */
+function sceneryDepth(kind: SceneryKind) {
+  return kind.startsWith("ship") ? 0.34 : 0.18;
+}
+
+function sceneryScale(kind: SceneryKind, i: number) {
+  if (kind.startsWith("ship")) return 1.35 + (i % 3) * 0.12;
+  return 0.9 + (i % 2) * 0.15;
+}
+
 export function seedScenery(startAt: number): Scenery[] {
   const list: Scenery[] = [];
-  let d = startAt + 520;
+  // Seed one big bone pile and one looming ship early so title screen reads the mood
+  list.push({
+    kind: "dinoB",
+    at: startAt + 380,
+    scale: 1.05,
+    seed: 2.4,
+    depth: 0.2,
+  });
+  list.push({
+    kind: "shipA",
+    at: startAt + 640,
+    scale: 1.52,
+    seed: 1.1,
+    depth: 0.34,
+  });
+  let d = startAt + 1100;
   for (let i = 0; i < 8; i++) {
+    const kind = SCENERY_KINDS[i % SCENERY_KINDS.length];
     list.push({
-      kind: SCENERY_KINDS[i % SCENERY_KINDS.length],
+      kind,
       at: d,
-      scale: 0.34 + (i % 3) * 0.05,
+      scale: sceneryScale(kind, i),
       seed: Math.random() * 10,
+      depth: sceneryDepth(kind),
     });
-    d += 860 + ((i * 211) % 420);
+    d += 720 + ((i * 211) % 380);
   }
   return list;
 }
 
 function wrapScenery(s: Session) {
-  const horizon = s.distance + W * 8;
+  const horizon = s.distance + W * 10;
   for (const sc of s.scenery) {
-    const x = sc.at - s.distance * 0.055;
-    if (x < -180) {
-      sc.at += 4200 + sc.seed * 180;
+    const x = sc.at - s.distance * sc.depth;
+    if (x < -280) {
+      sc.at += 4800 + sc.seed * 220;
       sc.kind = SCENERY_KINDS[Math.floor(Math.random() * SCENERY_KINDS.length)];
-      sc.scale = 0.32 + Math.random() * 0.14;
-      if (sc.at < horizon) sc.at = horizon + 200 + Math.random() * 500;
+      sc.scale = sceneryScale(sc.kind, Math.floor(sc.seed * 3));
+      sc.depth = sceneryDepth(sc.kind);
+      if (sc.at < horizon) sc.at = horizon + 180 + Math.random() * 600;
     }
   }
 }
 
-function spawnMeteor(s: Session) {
+function spawnMeteor(s: Session, weight = 1) {
+  const w = weight;
   s.meteors.push({
-    x: W * (0.35 + Math.random() * 0.6),
-    y: 6 + Math.random() * 28,
-    vx: -(55 + Math.random() * 80),
-    vy: 22 + Math.random() * 36,
-    life: 2.4 + Math.random() * 1.1,
-    max: 3.2,
-    len: 11 + Math.random() * 16,
+    x: W * (0.28 + Math.random() * 0.7),
+    y: 4 + Math.random() * 36,
+    vx: -(70 + Math.random() * 110) * (0.85 + w * 0.2),
+    vy: (28 + Math.random() * 48) * (0.9 + w * 0.15),
+    life: 2.0 + Math.random() * 1.4,
+    max: 3.4,
+    len: (14 + Math.random() * 22) * (0.7 + w * 0.45),
+    weight: w,
   });
 }
 
 function stepMeteors(s: Session, dt: number) {
   s.meteorWait -= dt;
   if (s.meteorWait <= 0) {
-    s.meteorWait = s.mode === "playing" ? 7 + Math.random() * 10 : 11 + Math.random() * 14;
-    spawnMeteor(s);
-    if (Math.random() < 0.16) spawnMeteor(s);
+    // First streak comes early; then either a quiet single or a brief shower
+    const first = s.elapsed < 2.5;
+    const shower = !first && s.elapsed > 5.5 && Math.random() < 0.42;
+    if (shower) {
+      const n = 4 + Math.floor(Math.random() * 5);
+      for (let i = 0; i < n; i++) {
+        spawnMeteor(s, 1.4 + Math.random() * 0.8);
+      }
+      s.meteorWait = s.mode === "playing" ? 4.5 + Math.random() * 5 : 8 + Math.random() * 8;
+    } else {
+      spawnMeteor(s, 0.85 + Math.random() * 0.4);
+      if (Math.random() < 0.22) spawnMeteor(s, 1);
+      s.meteorWait =
+        s.mode === "playing" ? 3.5 + Math.random() * 5.5 : 7 + Math.random() * 10;
+    }
   }
-  const floor = GROUND - 96;
+  const floor = GROUND - 80;
   for (const m of s.meteors) {
     m.x += m.vx * dt;
     m.y += m.vy * dt;
     m.life -= dt;
   }
-  s.meteors = s.meteors.filter((m) => m.life > 0 && m.y < floor && m.x > -20);
+  s.meteors = s.meteors.filter((m) => m.life > 0 && m.y < floor && m.x > -40);
 }
 
 function minGapPx(speed: number) {
   const airTime = (2 * Math.abs(JUMP_V)) / GRAVITY;
   const jumpClear = speed * airTime * 0.38;
-  const react = speed * 0.55;
-  return Math.max(260, jumpClear + react);
+  return Math.max(150, jumpClear);
 }
 
-function trySpawn(s: Session) {
-  if (!s.firstSpawned) {
-    if (s.elapsed < 0.7) return;
-    spawnObstacle(s, W + 28, "rock");
-    s.firstSpawned = true;
-    s.nextSpawnAt = s.distance + minGapPx(s.speed) * (1.05 + Math.random() * 0.2);
-    return;
-  }
+function maybeSpawn(s: Session) {
+  if (s.mode !== "playing") return;
   if (s.distance < s.nextSpawnAt) return;
-  const last = s.obstacles[s.obstacles.length - 1];
-  const spawnX = W + 36;
-  const gap = last ? spawnX - (last.x + last.w) : 1e9;
-  if (gap < minGapPx(s.speed)) {
-    s.nextSpawnAt = s.distance + 12;
-    return;
+  const type = pickType(s.heat);
+  const gap = minGapPx(s.speed) * (0.85 + Math.random() * 0.4);
+  const x = W + 40 + Math.random() * 40;
+  spawnObstacle(s, x, type);
+  s.nextSpawnAt = s.distance + gap;
+  if (!s.firstSpawned) s.firstSpawned = true;
+}
+
+function stepPlayer(s: Session, dt: number) {
+  if (s.buffer > 0) s.buffer -= dt;
+  if (s.coyote > 0) s.coyote -= dt;
+  if (s.buffer > 0 && (s.onGround || s.coyote > 0)) doJump(s);
+
+  s.vy += GRAVITY * dt;
+  s.playerY += s.vy * dt;
+  const floor = GROUND - PLAYER_DRAW;
+  if (s.playerY >= floor) {
+    if (!s.onGround && s.vy > 80) s.events.push("land");
+    s.playerY = floor;
+    s.vy = 0;
+    if (!s.onGround) {
+      s.onGround = true;
+      s.squashX = 1.18;
+      s.squashY = 0.82;
+      emitDust(s, PLAYER_X + 20, GROUND - 2, "#c4a574");
+    }
+  } else {
+    if (s.onGround) s.coyote = COYOTE;
+    s.onGround = false;
   }
-  spawnObstacle(s, spawnX, pickType(s.heat));
-  const wait = minGapPx(s.speed) * (0.95 + Math.random() * 0.55);
-  s.nextSpawnAt = s.distance + wait;
+  s.squashX += (1 - s.squashX) * Math.min(1, dt * 12);
+  s.squashY += (1 - s.squashY) * Math.min(1, dt * 12);
 }
 
-function hitbox(o: Obstacle) {
-  const spec = SPEC[o.type];
-  const dx = (o.w - spec.hitW) / 2;
-  return {
-    x: o.x + dx,
-    y: GROUND - spec.hitH,
-    w: spec.hitW,
-    h: spec.hitH,
-  };
-}
-
-function playerBox(s: Session) {
-  return {
-    x: PLAYER_X + 22,
-    y: s.playerY + 16,
-    w: 34,
-    h: PLAYER_DRAW - 24,
-  };
-}
-
-function endRun(s: Session) {
-  s.mode = "over";
-  s.flash = 0.28;
-  s.shake = 0.95;
-  s.events.push("crash");
-  emitCrash(s, PLAYER_X + 46, s.playerY + 48, "240,228,214", "196,84,58");
-  const sc = Math.floor(s.score);
-  if (sc > s.best) {
-    s.best = sc;
-    s.newBest = true;
-    saveBest(sc);
+function hitTest(s: Session) {
+  const px = PLAYER_X + 18;
+  const py = s.playerY + 16;
+  const pw = 28;
+  const ph = PLAYER_DRAW - 22;
+  for (const o of s.obstacles) {
+    const spec = SPEC[o.type];
+    const ox = o.x + (o.w - spec.hitW) / 2;
+    const oy = GROUND - spec.hitH;
+    if (px < ox + spec.hitW && px + pw > ox && py < oy + spec.hitH && py + ph > oy) {
+      return o;
+    }
   }
+  return null;
 }
 
-function stepParticles(list: Particle[], dt: number, g: number) {
-  for (const p of list) {
+function stepParticles(s: Session, dt: number) {
+  for (const p of s.particles) {
     p.x += p.vx * dt;
     p.y += p.vy * dt;
-    p.vy += g * dt;
+    p.vy += 420 * dt;
     p.life -= dt;
   }
-  return list.filter((p) => p.life > 0);
+  s.particles = s.particles.filter((p) => p.life > 0);
 }
 
-function simulate(s: Session, dt: number) {
+export function tick(s: Session, dt: number) {
+  s.events = [];
+  if (s.shake > 0) s.shake = Math.max(0, s.shake - dt * 3.2);
+  if (s.flash > 0) s.flash = Math.max(0, s.flash - dt * 4);
+
   if (s.mode === "title") {
     s.elapsed += dt;
-    s.distance += 42 * dt;
-    s.particles = stepParticles(s.particles, dt, 160);
+    s.distance += SPEED_0 * 0.22 * dt;
     wrapScenery(s);
     stepMeteors(s, dt);
-    s.squashX += (1 - s.squashX) * (1 - Math.exp(-10 * dt));
-    s.squashY += (1 - s.squashY) * (1 - Math.exp(-10 * dt));
+    stepParticles(s, dt);
     return;
   }
 
-  if (s.mode === "over") {
-    s.flash = Math.max(0, s.flash - dt);
-    s.shake = Math.max(0, s.shake - dt * 2.2);
-    s.particles = stepParticles(s.particles, dt, 240);
-    wrapScenery(s);
+  if (s.mode !== "playing") {
+    stepParticles(s, dt);
     stepMeteors(s, dt);
     return;
   }
 
   s.elapsed += dt;
-  s.speed = Math.min(SPEED_CAP, SPEED_0 + s.elapsed * 5.4 + Math.pow(s.elapsed, 1.12) * 0.4);
+  s.acc += dt;
+  s.heat = Math.min(1, s.elapsed / 90);
+  s.speed = SPEED_0 + (SPEED_CAP - SPEED_0) * s.heat;
   s.distance += s.speed * dt;
   s.score = s.distance * SCORE_PER_PX;
-  s.heat = Math.min(1, s.elapsed / 62);
 
-  if (s.onGround) s.coyote = COYOTE;
-  else s.coyote = Math.max(0, s.coyote - dt);
-  s.buffer = Math.max(0, s.buffer - dt);
+  stepPlayer(s, dt);
+  maybeSpawn(s);
 
-  const wasGround = s.onGround;
-  s.vy += GRAVITY * dt;
-  s.playerY += s.vy * dt;
-  const floor = GROUND - PLAYER_DRAW;
-  if (s.playerY >= floor) {
-    s.playerY = floor;
-    s.vy = 0;
-    s.onGround = true;
-    if (!wasGround) {
-      s.squashX = 1.22;
-      s.squashY = 0.78;
-      s.events.push("land");
-      emitDust(s, PLAYER_X + 34, GROUND - 2, "210,198,182");
-    }
-  } else {
-    s.onGround = false;
-  }
-
-  if (s.buffer > 0 && (s.onGround || s.coyote > 0)) doJump(s);
-
-  s.squashX += (1 - s.squashX) * (1 - Math.exp(-12 * dt));
-  s.squashY += (1 - s.squashY) * (1 - Math.exp(-12 * dt));
-
-  trySpawn(s);
-
-  const pb = playerBox(s);
-  for (let i = s.obstacles.length - 1; i >= 0; i--) {
-    const o = s.obstacles[i];
-    o.x -= s.speed * dt;
-    if (o.x + o.w < -50) {
-      s.obstacles.splice(i, 1);
-      continue;
-    }
-    const hb = hitbox(o);
-    if (pb.x < hb.x + hb.w && pb.x + pb.w > hb.x && pb.y < hb.y + hb.h && pb.y + pb.h > hb.y) {
-      endRun(s);
-      break;
-    }
-  }
+  for (const o of s.obstacles) o.x -= s.speed * dt;
+  s.obstacles = s.obstacles.filter((o) => o.x > -120);
 
   wrapScenery(s);
   stepMeteors(s, dt);
+  stepParticles(s, dt);
 
-  s.particles = stepParticles(s.particles, dt, 260);
-  s.shake = Math.max(0, s.shake - dt * 2.4);
-}
-
-const STEP = 1 / 60;
-
-export function tick(s: Session, dt: number) {
-  s.events = [];
-  s.acc += Math.min(dt, 0.05);
-  let steps = 0;
-  while (s.acc >= STEP && steps < 5) {
-    simulate(s, STEP);
-    s.acc -= STEP;
-    steps++;
+  const hit = hitTest(s);
+  if (hit) {
+    emitCrash(s, PLAYER_X + 30, s.playerY + 40, "#e8d4a8", "#8b4513");
+    s.shake = 1;
+    s.flash = 1;
+    s.mode = "over";
+    s.events.push("crash");
+    if (s.score > s.best) {
+      s.best = Math.floor(s.score);
+      s.newBest = true;
+      saveBest(s.best);
+    }
   }
 }
 
